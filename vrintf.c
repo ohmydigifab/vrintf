@@ -103,9 +103,6 @@ void *send_to_fifo(void *args) {
 	int i;
 	int send_cur = 0;
 	int fd = (int) args;
-	struct timeval last_mousemove_time;
-	struct timeval now;
-	gettimeofday(&last_mousemove_time, &tzone);
 
 	while (1) {
 		if (send_cur >= buff_cur) {
@@ -121,44 +118,29 @@ void *send_to_fifo(void *args) {
 					% DETECTION_BUFF_LENGTH];
 			send_cur++;
 
-			if ((send_cur % 100) == 0) {
-				printf("send_cur : %d\n", send_cur);
-			}
 			if (d->x == d_pre->x && d->y == d_pre->y
 					&& d->with_c == d_pre->with_c && d->c == d_pre->c) {
 				continue;
 			}
 			{
-				gettimeofday(&now, &tzone);
-				double elapsedTime = (double) (now.tv_sec
-						- last_mousemove_time.tv_sec)
-						+ (double) (now.tv_usec - last_mousemove_time.tv_usec)
-								/ 1000000.0;
-
 				int dx = d->x - last_screen_x;
 				int dy = d->y - last_screen_y;
-				if (1 || d->with_c != 0 || elapsedTime > 0.020) {
-					if (d->x < 0) {
-						dx -= abs(d->x) / 10;
-					} else if (d->x > screen_w) {
-						dx += abs(d->x - screen_w) / 10;
-					}
-					if (d->y < 0) {
-						dy -= abs(d->y) / 10;
-					} else if (d->y > screen_h) {
-						dy += abs(d->y - screen_h) / 10;
-					}
-					if (dx != 0)
-						SEND_EVENT(EV_REL, ABS_X, dx);
-					if (dy != 0)
-						SEND_EVENT(EV_REL, ABS_Y, dy);
-//					last_screen_x = fmin(screen_w, fmax(0, d->x));
-//					last_screen_y = fmin(screen_h, fmax(0, d->y));
-					last_screen_x = d->x;
-					last_screen_y = d->y;
-
-					last_mousemove_time = now;
+				if (d->x < 0) {
+					dx -= abs(d->x) / 10;
+				} else if (d->x > screen_w) {
+					dx += abs(d->x - screen_w) / 10;
 				}
+				if (d->y < 0) {
+					dy -= abs(d->y) / 10;
+				} else if (d->y > screen_h) {
+					dy += abs(d->y - screen_h) / 10;
+				}
+				if (dx != 0)
+					SEND_EVENT(EV_REL, ABS_X, dx);
+				if (dy != 0)
+					SEND_EVENT(EV_REL, ABS_Y, dy);
+				last_screen_x = d->x;
+				last_screen_y = d->y;
 			}
 			if (d->with_c) {
 				int c = d->c;
@@ -563,7 +545,6 @@ void *process_poling(void *args) {
 		process_cur++;
 	}
 }
-
 
 int main(int argc, char ** argv) {
 	parse_args(argc, argv);
