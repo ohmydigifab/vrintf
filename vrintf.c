@@ -1,3 +1,25 @@
+/*
+ * vrintf - A vr interface
+ *
+ * Implementation
+ * 2015	by takumadx @ ohmydigifab <hirayama.takuma@ohmydigifab.com>
+ *
+ * License:
+ *		This program is free software; you can redistribute it and/or
+ *		modify it under the terms of the GNU General Public License as
+ *		published by the Free Software Foundation;
+ *		strictly version 2 only.
+ *
+ *		This program is distributed in the hope that it will be useful,
+ *		but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *		GNU General Public License for more details.
+ *
+ *		You should have received a copy of the GNU General Public
+ *		License	along with this program; if not, write to the
+ *		Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ *		Boston, MA  02110-1301  USA
+ */
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -557,9 +579,11 @@ int main(int argc, char ** argv) {
 		open_socket();
 	}
 
-	FILE *fp = popen(
-			"/opt/vc/bin/raspividyuv -w 640 -h 480 -fps 60 -t 0 -ss 100 -o -",
-			"r");
+	char cam_command[256];
+	sprintf(cam_command,
+			"/opt/vc/bin/raspividyuv -w %d -h %d -fps %d -t 0 -ss %d -o -",
+			frame_w, frame_h, 60, 100);
+	FILE *fp = popen(cam_command, "r");
 
 	pthread_t pt;
 	pthread_create(&pt, NULL, &process_poling, (void*) 0);
@@ -636,7 +660,7 @@ void parse_args(int argc, char ** argv) {
 }
 
 void showhelp(void) {
-	fprintf( stdout, "pivrif");
+	fprintf( stdout, "vrintf");
 	return;
 }
 
