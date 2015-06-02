@@ -39,12 +39,12 @@
 #include <sys/stat.h>
 #include <linux/input.h>
 
-#define SEND_EVENT(_type, _code, _value) do{\
+#define SEND_EVENT(_fd, _type, _code, _value) do{\
 	struct input_event eve;\
 	eve.type = _type;\
 	eve.code = _code;\
 	eve.value = _value;\
-	int n = write(fd, &eve, sizeof(struct input_event));\
+	int n = write(_fd, &eve, sizeof(struct input_event));\
 	if (n < 0) {\
 		perror("write");\
 		exit(-1);\
@@ -92,8 +92,6 @@ static int frame_w = 640;
 static int frame_h = 480;
 static int screen_w = 1920;
 static int screen_h = 1080;
-static int last_screen_x = 0;
-static int last_screen_y = 0;
 static int last_x = 0;
 static int last_y = 0;
 static int last_c = 0;
@@ -125,6 +123,8 @@ void *send_to_fifo(void *args) {
 	int i;
 	int send_cur = 0;
 	int fd = (int) args;
+	int last_screen_x = 0;
+	int last_screen_y = 0;
 
 	while (1) {
 		if (send_cur >= buff_cur) {
@@ -158,9 +158,9 @@ void *send_to_fifo(void *args) {
 					dy += abs(d->y - screen_h) / 10;
 				}
 				if (dx != 0)
-					SEND_EVENT(EV_REL, ABS_X, dx);
+					SEND_EVENT(fd, EV_REL, ABS_X, dx);
 				if (dy != 0)
-					SEND_EVENT(EV_REL, ABS_Y, dy);
+					SEND_EVENT(fd, EV_REL, ABS_Y, dy);
 				last_screen_x = d->x;
 				last_screen_y = d->y;
 			}
@@ -175,37 +175,37 @@ void *send_to_fifo(void *args) {
 				}
 				switch (c) {
 				case 1:
-//					SEND_EVENT(EV_KEY, KEY_C, 1);
-//					SEND_EVENT(EV_KEY, KEY_C, 0);
-					SEND_EVENT(EV_KEY, BTN_LEFT, 1);
-					SEND_EVENT(EV_KEY, BTN_LEFT, 0);
+//					SEND_EVENT(fd, EV_KEY, KEY_C, 1);
+//					SEND_EVENT(fd, EV_KEY, KEY_C, 0);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
 					break;
 				case 2:
 					//repeat
 					break;
 				case 3:
-					SEND_EVENT(EV_KEY, BTN_LEFT, 1);
-					SEND_EVENT(EV_KEY, BTN_LEFT, 0);
-					SEND_EVENT(EV_KEY, BTN_LEFT, 1);
-					SEND_EVENT(EV_KEY, BTN_LEFT, 0);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
 					break;
 				case 4:
 					for (i = 0; i < fmin(5, repeat_num + 1); i++)
-						SEND_EVENT(EV_REL, ABS_Z, -1);
+						SEND_EVENT(fd, EV_REL, ABS_Z, -1);
 					break;
 				case 5:
 					for (i = 0; i < fmin(5, repeat_num + 1); i++)
-						SEND_EVENT(EV_REL, ABS_Z, 1);
+						SEND_EVENT(fd, EV_REL, ABS_Z, 1);
 					break;
 				case 6:
-					SEND_EVENT(EV_KEY, BTN_LEFT, 1);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
 					break;
 				case 7:
-					SEND_EVENT(EV_KEY, BTN_LEFT, 0);
+					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
 					break;
 				case 8:
-					SEND_EVENT(EV_KEY, BTN_RIGHT, 1);
-					SEND_EVENT(EV_KEY, BTN_RIGHT, 0);
+					SEND_EVENT(fd, EV_KEY, BTN_RIGHT, 1);
+					SEND_EVENT(fd, EV_KEY, BTN_RIGHT, 0);
 					break;
 				}
 			}
@@ -213,7 +213,7 @@ void *send_to_fifo(void *args) {
 	}
 
 	{ //shutdown
-		SEND_EVENT(EV_KEY, KEY_PAUSE, 0);
+		SEND_EVENT(fd, EV_KEY, KEY_PAUSE, 0);
 	}
 
 	return 0;
