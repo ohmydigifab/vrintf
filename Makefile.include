@@ -1,4 +1,3 @@
-
 CFLAGS = -Werror -g -Wall -O0
 LDFLAGS = -L$(SDKSTAGE)/opt/vc/lib -lvcos -lbcm_host -lvchiq_arm -lpthread -ldl -lm -lrt
 INCLUDES = -I$(SDKSTAGE)/opt/vc/include -I$(SDKSTAGE)/opt/vc/include/interface/vcos/pthreads \
@@ -7,15 +6,18 @@ INCLUDES = -I$(SDKSTAGE)/opt/vc/include -I$(SDKSTAGE)/opt/vc/include/interface/v
 SRC := $(SRC) $(APP).c
 OBJS := $(OBJS) $(APP).o
 
-all: $(APP) $(SRC)
+all: $(APP) $(SRC) $(SUBDIRS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@ -Wno-deprecated-declarations
 
 $(APP): $(OBJS)
 	$(CC) -o $@ -Wl,--whole-archive $(OBJS) $(LDFLAGS) -Wl,--no-whole-archive -rdynamic
-
-.PHONY: clean rebuild
+	
+$(SUBDIRS):
+	$(MAKE) -C $@
+     
+.PHONY: clean rebuild $(SUBDIRS)
 
 clean:
 	rm -f $(APP) $(APP).o $(CLEAN)
