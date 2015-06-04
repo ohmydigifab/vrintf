@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <linux/input.h>
 
+//macro difinition
 #define SEND_EVENT(_fd, _type, _code, _value) do{\
 	struct input_event eve;\
 	eve.type = _type;\
@@ -54,6 +55,11 @@
 //pre procedure difinition
 void showhelp(void);
 void parse_args(int argc, char ** argv);
+
+//enum difinition
+typedef enum _OutputType {
+	RawString, LinuxMouseInput,
+} OutputType;
 
 //structure difinition
 typedef struct _Frame {
@@ -97,6 +103,7 @@ static int last_y = 0;
 static int last_c = 0;
 static int repeat_num = 0;
 static int now_on = 0;
+static OutputType output_type = RawString;
 
 #define DETECTION_BUFF_LENGTH 1024
 static unsigned int buff_cur = 0;
@@ -116,15 +123,95 @@ static uint32_t frame_size;
 static struct timeval last_detected;
 static struct timezone tzone;
 
+static int last_screen_x = 0;
+static int last_screen_y = 0;
+
+void send_detection_as_linux_mouse_input(int fd, Detection *d) {
+	int i;
+	{
+		int dx = d->x - last_screen_x;
+		int dy = d->y - last_screen_y;
+		if (d->x < 0) {
+			dx -= abs(d->x) / 10;
+		} else if (d->x > screen_w) {
+			dx += abs(d->x - screen_w) / 10;
+		}
+		if (d->y < 0) {
+			dy -= abs(d->y) / 10;
+		} else if (d->y > screen_h) {
+			dy += abs(d->y - screen_h) / 10;
+		}
+		if (dx != 0)
+			SEND_EVENT(fd, EV_REL, ABS_X, dx);
+		if (dy != 0)
+			SEND_EVENT(fd, EV_REL, ABS_Y, dy);
+		last_screen_x = d->x;
+		last_screen_y = d->y;
+	}
+	if (d->with_c) {
+		int c = d->c;
+		if (d->c == 2) {
+			c = last_c;
+			repeat_num++;
+		} else {
+			last_c = d->c;
+			repeat_num = 0;
+		}
+		switch (c) {
+		case 1:
+//					SEND_EVENT(fd, EV_KEY, KEY_C, 1);
+//					SEND_EVENT(fd, EV_KEY, KEY_C, 0);
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
+			break;
+		case 2:
+			//repeat
+			break;
+		case 3:
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
+			break;
+		case 4:
+			for (i = 0; i < fmin(5, repeat_num + 1); i++)
+				SEND_EVENT(fd, EV_REL, ABS_Z, -1);
+			break;
+		case 5:
+			for (i = 0; i < fmin(5, repeat_num + 1); i++)
+				SEND_EVENT(fd, EV_REL, ABS_Z, 1);
+			break;
+		case 6:
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
+			break;
+		case 7:
+			SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
+			break;
+		case 8:
+			SEND_EVENT(fd, EV_KEY, BTN_RIGHT, 1);
+			SEND_EVENT(fd, EV_KEY, BTN_RIGHT, 0);
+			break;
+		}
+	}
+}
+void send_detection_as_raw_string(int fd, Detection *d) {
+	char buf[512];
+	int count;
+	if (d->with_c) {
+		count = sprintf(buf, "x=%d,y=%d,c=%d\n", d->x, d->y, d->c);
+	} else {
+		count = sprintf(buf, "x=%d,y=%d\n", d->x, d->y);
+	}
+	//printf(buf);
+	write(fd, buf, count + 1);
+}
+
 /*
  * send ui event to fifo
  */
 void *send_to_fifo(void *args) {
-	int i;
 	int send_cur = 0;
 	int fd = (int) args;
-	int last_screen_x = 0;
-	int last_screen_y = 0;
 
 	while (1) {
 		if (send_cur >= buff_cur) {
@@ -140,74 +227,17 @@ void *send_to_fifo(void *args) {
 					% DETECTION_BUFF_LENGTH];
 			send_cur++;
 
-			if (d->x == d_pre->x && d->y == d_pre->y
-					&& d->with_c == d_pre->with_c && d->c == d_pre->c) {
+			if (d->with_c == 0 && d->x == d_pre->x && d->y == d_pre->y) {
 				continue;
 			}
-			{
-				int dx = d->x - last_screen_x;
-				int dy = d->y - last_screen_y;
-				if (d->x < 0) {
-					dx -= abs(d->x) / 10;
-				} else if (d->x > screen_w) {
-					dx += abs(d->x - screen_w) / 10;
-				}
-				if (d->y < 0) {
-					dy -= abs(d->y) / 10;
-				} else if (d->y > screen_h) {
-					dy += abs(d->y - screen_h) / 10;
-				}
-				if (dx != 0)
-					SEND_EVENT(fd, EV_REL, ABS_X, dx);
-				if (dy != 0)
-					SEND_EVENT(fd, EV_REL, ABS_Y, dy);
-				last_screen_x = d->x;
-				last_screen_y = d->y;
-			}
-			if (d->with_c) {
-				int c = d->c;
-				if (d->c == 2) {
-					c = last_c;
-					repeat_num++;
-				} else {
-					last_c = d->c;
-					repeat_num = 0;
-				}
-				switch (c) {
-				case 1:
-//					SEND_EVENT(fd, EV_KEY, KEY_C, 1);
-//					SEND_EVENT(fd, EV_KEY, KEY_C, 0);
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
-					break;
-				case 2:
-					//repeat
-					break;
-				case 3:
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
-					break;
-				case 4:
-					for (i = 0; i < fmin(5, repeat_num + 1); i++)
-						SEND_EVENT(fd, EV_REL, ABS_Z, -1);
-					break;
-				case 5:
-					for (i = 0; i < fmin(5, repeat_num + 1); i++)
-						SEND_EVENT(fd, EV_REL, ABS_Z, 1);
-					break;
-				case 6:
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 1);
-					break;
-				case 7:
-					SEND_EVENT(fd, EV_KEY, BTN_LEFT, 0);
-					break;
-				case 8:
-					SEND_EVENT(fd, EV_KEY, BTN_RIGHT, 1);
-					SEND_EVENT(fd, EV_KEY, BTN_RIGHT, 0);
-					break;
-				}
+			switch (output_type) {
+			case LinuxMouseInput:
+				send_detection_as_linux_mouse_input(fd, d);
+				break;
+			case RawString:
+			default:
+				send_detection_as_raw_string(fd, d);
+				break;
 			}
 		}
 	}
@@ -652,6 +682,8 @@ void parse_args(int argc, char ** argv) {
 			exit(0);
 		} else if (0 == strncmp(argv[i], "-f", 2)) {
 			fifoname = argv[i] + 2;
+		} else if (0 == strcmp(argv[i], "--linux-mouse-input-emu")) {
+			output_type = LinuxMouseInput;
 		} else {
 			fprintf( stderr, "Invalid argument: \'%s\'\n", argv[i]);
 			exit(1);
