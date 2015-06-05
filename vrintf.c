@@ -202,8 +202,8 @@ void send_detection_as_raw_string(int fd, Detection *d) {
 	} else {
 		count = sprintf(buf, "x=%d,y=%d,z=%d\n", d->x, d->y, d->z);
 	}
-	printf(buf);
-	write(fd, buf, count + 1);
+	//printf(buf);
+	write(fd, buf, count);
 }
 
 /*
@@ -302,6 +302,15 @@ void *send_to_fifo(void *args) {
 				rd = rd_next;
 				receive_cur++;
 			}
+			if (rd != NULL) {
+				double t = (double) (d->time.tv_sec - rd->time.tv_sec)
+						+ (double) (d->time.tv_usec - rd->time.tv_usec)
+								/ 1000000.0;
+				if (t > 5) {
+					rd = NULL;
+				}
+
+			}
 			if (rd != NULL) { //z
 				double F = 1080; //distance between virtual screen and lens focal
 				double W = 0.25 * 1000; //250mm distance between cam1 and cam2
@@ -326,8 +335,8 @@ void *send_to_fifo(void *args) {
 				}
 				if (d->z != 0) {
 					int y1 = d->y - screen_h / 2;
-					d->x = x1 * d->z / F;
-					d->y = y1 * d->z / F;
+					d->x = x1 * d->z / F + W / 2;
+					d->y = -y1 * d->z / F;
 				}
 			}
 			switch (output_type) {
@@ -450,6 +459,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 							% TOGGLE_BUFF_LENGTH];
 					Detection *d = &detection_buffer[(buff_cur + 1)
 							% DETECTION_BUFF_LENGTH];
+					memset(d, 0, sizeof(Detection));
 					d->time = now;
 					d->x = tg_start->x;
 					d->y = tg_start->y;
@@ -529,6 +539,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 		}
 
 		Detection *d = &detection_buffer[(buff_cur + 1) % DETECTION_BUFF_LENGTH];
+		memset(d, 0, sizeof(Detection));
 		d->time = now;
 		d->x = screen_x;
 		d->y = screen_y;
