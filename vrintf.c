@@ -607,7 +607,7 @@ int main(int argc, char ** argv) {
 	if (event_in_fifoname != NULL) {
 		int fd;
 		if (0 == strcmp(event_in_fifoname, "-")) {
-			fd = 0; //stdout
+			fd = 1; //stdin
 		} else {
 			fd = open_fifo(event_in_fifoname);
 		}
