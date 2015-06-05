@@ -28,11 +28,7 @@
 #include <math.h>
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <arpa/inet.h>
-#include <netdb.h>
+#include <stdint.h>
 #include <pthread.h>
 
 #include <sys/time.h>
@@ -87,13 +83,15 @@ typedef struct _Detection {
 	struct timeval time;
 	int x;
 	int y;
+	int z;
 	int c;
 	int with_c;
 } Detection;
 
 //global variables
 static int running = 1;
-static const char *fifoname = NULL;
+static const char *event_out_fifoname = NULL;
+static const char *event_in_fifoname = NULL;
 static int frame_w = 640;
 static int frame_h = 480;
 static int screen_w = 1920;
@@ -108,6 +106,8 @@ static OutputType output_type = RawString;
 #define DETECTION_BUFF_LENGTH 1024
 static unsigned int buff_cur = 0;
 static Detection detection_buffer[DETECTION_BUFF_LENGTH];
+static unsigned int receive_buff_cur = 0;
+static Detection receive_detection_buffer[DETECTION_BUFF_LENGTH];
 
 #define TOGGLE_BUFF_LENGTH 1024
 static unsigned int toggle_buff_cur = 0;
@@ -198,18 +198,69 @@ void send_detection_as_raw_string(int fd, Detection *d) {
 	char buf[512];
 	int count;
 	if (d->with_c) {
-		count = sprintf(buf, "x=%d,y=%d,c=%d\n", d->x, d->y, d->c);
+		count = sprintf(buf, "x=%d,y=%d,z=%d,c=%d\n", d->x, d->y, d->z, d->c);
 	} else {
-		count = sprintf(buf, "x=%d,y=%d\n", d->x, d->y);
+		count = sprintf(buf, "x=%d,y=%d,z=%d\n", d->x, d->y, d->z);
 	}
 	//printf(buf);
 	write(fd, buf, count + 1);
 }
 
 /*
+ * receive ui event to fifo
+ */
+void *receive_from_fifo(void *args) {
+	int i;
+	char buf[512];
+	int fd = (int) args;
+	while (1) {
+		for (i = 0; i < sizeof(buf) - 1;) {
+			char *cur = buf + i;
+			int n = read(fd, cur, 1);
+			if (n <= 0) {
+				usleep(100);
+				continue;
+			}
+			if (*cur == '\0' || *cur == '\r') {
+				//skip
+				continue;
+			} else {
+				i++;
+			}
+			if (*cur == '\n') {
+				break;
+			}
+		}
+		buf[i] = '\0';
+		//printf(buf);
+		if (i == sizeof(buf) - 1) {
+			perror("input event is too long");
+			exit(1);
+		}
+		Detection *d = &receive_detection_buffer[receive_buff_cur
+				% DETECTION_BUFF_LENGTH];
+		memset(d, 0, sizeof(Detection));
+		int num = sscanf(buf, "x=%d,y=%d,z=%d,c=%d", &d->x, &d->y, &d->z,
+				&d->c);
+		if (num == 3) {
+			d->with_c = 0;
+		} else if (num == 4) {
+			d->with_c = 1;
+		} else {
+			//skip
+			continue;
+		}
+		gettimeofday(&d->time, &tzone);
+		receive_buff_cur++;
+	}
+	return 0;
+}
+
+/*
  * send ui event to fifo
  */
 void *send_to_fifo(void *args) {
+	int receive_cur = 0;
 	int send_cur = 0;
 	int fd = (int) args;
 
@@ -221,6 +272,7 @@ void *send_to_fifo(void *args) {
 		if (buff_cur - send_cur > DETECTION_BUFF_LENGTH / 2) {
 			send_cur = buff_cur - DETECTION_BUFF_LENGTH / 2;
 		}
+		Detection *rd = NULL;
 		while (send_cur < buff_cur) {
 			Detection *d = &detection_buffer[send_cur % DETECTION_BUFF_LENGTH];
 			Detection *d_pre = &detection_buffer[(send_cur - 1)
@@ -229,6 +281,49 @@ void *send_to_fifo(void *args) {
 
 			if (d->with_c == 0 && d->x == d_pre->x && d->y == d_pre->y) {
 				continue;
+			}
+			while (receive_cur < receive_buff_cur) {
+				Detection *rd_next = &receive_detection_buffer[receive_cur
+						% DETECTION_BUFF_LENGTH];
+				if (rd == NULL) {
+					rd = rd_next;
+					receive_cur++;
+					continue;
+				}
+				double t1 = (double) (d->time.tv_sec - rd->time.tv_sec)
+						+ (double) (d->time.tv_usec - rd->time.tv_usec)
+								/ 1000000.0;
+				double t2 = (double) (d->time.tv_sec - rd_next->time.tv_sec)
+						+ (double) (d->time.tv_usec - rd_next->time.tv_usec)
+								/ 1000000.0;
+				if (t2 > t1) {
+					break;
+				}
+				rd = rd_next;
+				receive_cur++;
+			}
+			if (rd != NULL) { //z
+				double H = 1080; //distance between virtual screen and lens focal
+				double W = 0.25 * 1000; //250mm distance between cam1 and cam2
+				int x1 = screen_w / 2 - d->x;
+				int x2 = screen_w / 2 - rd->x;
+				if (x1 == x2) {
+					//infinite far away
+				} else if (x1 == 0) {
+					double tan2 = H / -x2;
+					d->z = W * tan2;
+				} else if (x2 == 0) {
+					double tan1 = H / x1;
+					d->z = W * tan1;
+				} else {
+					double tan1 = H / x1;
+					double tan2 = H / -x2;
+					double m = tan1 * tan2;
+					double p = tan1 + tan2;
+					if (p != 0) { //fail safe
+						d->z = W * m / p;
+					}
+				}
 			}
 			switch (output_type) {
 			case LinuxMouseInput:
@@ -245,57 +340,6 @@ void *send_to_fifo(void *args) {
 	{ //shutdown
 		SEND_EVENT(fd, EV_KEY, KEY_PAUSE, 0);
 	}
-
-	return 0;
-}
-
-/*
- * send ui event to server
- */
-void *send_to_server(void *args) {
-	int send_cur = 0;
-	int sock = (int) args;
-	char buf[512];
-
-	while (1) {
-		if (send_cur >= buff_cur) {
-			usleep(1000);
-			continue;
-		}
-		if (buff_cur - send_cur > DETECTION_BUFF_LENGTH / 2) {
-			send_cur = buff_cur - DETECTION_BUFF_LENGTH / 2;
-		}
-		int count = 0;
-		while (send_cur < buff_cur && count < sizeof(buf) - 128) {
-			Detection *d = &detection_buffer[send_cur % DETECTION_BUFF_LENGTH];
-			Detection *d_pre = &detection_buffer[(send_cur - 1)
-					% DETECTION_BUFF_LENGTH];
-			send_cur++;
-			if (d->x == d_pre->x && d->y == d_pre->y
-					&& d->with_c == d_pre->with_c && d->c == d_pre->c) {
-				continue;
-			}
-			if (d->with_c) {
-				count += sprintf(buf + count, "x=%d,y=%d,c=%d\n", d->x, d->y,
-						d->c);
-			} else {
-				count += sprintf(buf + count, "x=%d,y=%d\n", d->x, d->y);
-			}
-		}
-		if (count > 0) {
-			//printf("\nsend : %s\n", buf);
-			int n = send(sock, buf, count, 0);
-			//printf("send succeed\n\n");
-			if (n < 0) {
-				perror("read");
-				break;
-			}
-		}
-	}
-
-	//printf("%d, %s\n", n, buf);
-
-	close(sock);
 
 	return 0;
 }
@@ -327,80 +371,6 @@ int open_fifo(const char *filename) {
 		return 0;
 	}
 	return fd;
-}
-
-/*
- * open socket
- */
-int open_socket() {
-	struct sockaddr_in server;
-	char *deststr;
-	unsigned int **addrptr;
-
-	deststr = "192.168.2.10";
-
-	int sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock < 0) {
-		perror("socket");
-		return 1;
-	}
-
-	server.sin_family = AF_INET;
-	server.sin_port = htons(12345);
-
-	server.sin_addr.s_addr = inet_addr(deststr);
-	if (server.sin_addr.s_addr == 0xffffffff) {
-		struct hostent *host;
-
-		host = gethostbyname(deststr);
-		if (host == NULL) {
-			if (h_errno == HOST_NOT_FOUND) {
-				/* h_errnoはexternで宣言されています */
-				printf("host not found : %s\n", deststr);
-			} else {
-				/*
-				 HOST_NOT_FOUNDだけ特別扱いする必要はないですが、
-				 とりあえず例として分けてみました
-				 */
-				printf("%s : %s\n", hstrerror(h_errno), deststr);
-			}
-			return 1;
-		}
-
-		addrptr = (unsigned int **) host->h_addr_list;
-
-		while (*addrptr != NULL) {
-			server.sin_addr.s_addr = *(*addrptr);
-
-			/* connect()が成功したらloopを抜けます */
-			if (connect(sock, (struct sockaddr *) &server, sizeof(server))
-					== 0) {
-				break;
-			}
-
-			addrptr++;
-			/* connectが失敗したら次のアドレスで試します */
-		}
-
-		/* connectが全て失敗した場合 */
-		if (*addrptr == NULL) {
-			perror("connect");
-			return 1;
-		}
-	} else {
-		/* inet_addr()が成功したとき */
-
-		/* connectが失敗したらエラーを表示して終了 */
-		if (connect(sock, (struct sockaddr *) &server, sizeof(server)) != 0) {
-			perror("connect");
-			return 1;
-		}
-	}
-
-	pthread_t pt;
-	pthread_create(&pt, NULL, &send_to_server, (void*) sock);
-
-	return 0;
 }
 
 #define AVERAGE_FACTOR 64
@@ -601,18 +571,32 @@ void *process_poling(void *args) {
 int main(int argc, char ** argv) {
 	parse_args(argc, argv);
 
-	if (fifoname != NULL) {
-		int fd = open_fifo(fifoname);
+	if (event_out_fifoname != NULL) {
+		int fd = open_fifo(event_out_fifoname);
+		if (fd <= 0) {
+			perror("Invalid fifo.\nPlease refer -h");
+			return -1;
+		}
 		pthread_t pt;
 		pthread_create(&pt, NULL, &send_to_fifo, (void*) fd);
 	} else {
-		open_socket();
+		perror("Invalid args.\nPlease refer -h");
+		return -1;
+	}
+	if (event_in_fifoname != NULL) {
+		int fd = open_fifo(event_in_fifoname);
+		if (fd <= 0) {
+			perror("Invalid fifo.\nPlease refer -h");
+			return -1;
+		}
+		pthread_t pt;
+		pthread_create(&pt, NULL, &receive_from_fifo, (void*) fd);
 	}
 
 	char cam_command[256];
 	sprintf(cam_command,
 			"/opt/vc/bin/raspividyuv -w %d -h %d -fps %d -t 0 -ss %d -o -",
-			frame_w, frame_h, 60, 100);
+			frame_w, frame_h, 30, 1000);
 	FILE *fp = popen(cam_command, "r");
 
 	pthread_t pt;
@@ -680,8 +664,10 @@ void parse_args(int argc, char ** argv) {
 				|| (0 == strcmp(argv[i], "--help"))) {
 			showhelp();
 			exit(0);
-		} else if (0 == strncmp(argv[i], "-f", 2)) {
-			fifoname = argv[i] + 2;
+		} else if (0 == strncmp(argv[i], "-i", 2)) {
+			event_in_fifoname = argv[i] + 2;
+		} else if (0 == strncmp(argv[i], "-o", 2)) {
+			event_out_fifoname = argv[i] + 2;
 		} else if (0 == strcmp(argv[i], "--linux-mouse-input-emu")) {
 			output_type = LinuxMouseInput;
 		} else {
