@@ -202,7 +202,7 @@ void send_detection_as_raw_string(int fd, Detection *d) {
 	} else {
 		count = sprintf(buf, "x=%d,y=%d,z=%d\n", d->x, d->y, d->z);
 	}
-	//printf(buf);
+	printf(buf);
 	write(fd, buf, count + 1);
 }
 
@@ -263,6 +263,7 @@ void *send_to_fifo(void *args) {
 	int receive_cur = 0;
 	int send_cur = 0;
 	int fd = (int) args;
+	Detection *rd = NULL;
 
 	while (1) {
 		if (send_cur >= buff_cur) {
@@ -272,7 +273,6 @@ void *send_to_fifo(void *args) {
 		if (buff_cur - send_cur > DETECTION_BUFF_LENGTH / 2) {
 			send_cur = buff_cur - DETECTION_BUFF_LENGTH / 2;
 		}
-		Detection *rd = NULL;
 		while (send_cur < buff_cur) {
 			Detection *d = &detection_buffer[send_cur % DETECTION_BUFF_LENGTH];
 			Detection *d_pre = &detection_buffer[(send_cur - 1)
@@ -303,26 +303,31 @@ void *send_to_fifo(void *args) {
 				receive_cur++;
 			}
 			if (rd != NULL) { //z
-				double H = 1080; //distance between virtual screen and lens focal
+				double F = 1080; //distance between virtual screen and lens focal
 				double W = 0.25 * 1000; //250mm distance between cam1 and cam2
-				int x1 = screen_w / 2 - d->x;
-				int x2 = screen_w / 2 - rd->x;
+				int x1 = d->x - screen_w / 2;
+				int x2 = rd->x - screen_w / 2;
 				if (x1 == x2) {
 					//infinite far away
 				} else if (x1 == 0) {
-					double tan2 = H / -x2;
+					double tan2 = F / x2;
 					d->z = W * tan2;
 				} else if (x2 == 0) {
-					double tan1 = H / x1;
+					double tan1 = F / -x1;
 					d->z = W * tan1;
 				} else {
-					double tan1 = H / x1;
-					double tan2 = H / -x2;
+					double tan1 = F / -x1;
+					double tan2 = F / x2;
 					double m = tan1 * tan2;
 					double p = tan1 + tan2;
 					if (p != 0) { //fail safe
 						d->z = W * m / p;
 					}
+				}
+				if (d->z != 0) {
+					int y1 = d->y - screen_h / 2;
+					d->x = x1 * d->z / F;
+					d->y = y1 * d->z / F;
 				}
 			}
 			switch (output_type) {
@@ -508,8 +513,8 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 		float factor = fmaxf(screen_w / width, screen_h / height) * 1.2;
 		screen_x = screen_w / 2 - (max_x - width / 2) * factor;
 		screen_y = screen_h / 2 + (max_y - height / 2) * factor;
-		//screen_x = fmin(screen_w, fmax(0, screen_x));
-		//screen_y = fmin(screen_h, fmax(0, screen_y));
+//screen_x = fmin(screen_w, fmax(0, screen_x));
+//screen_y = fmin(screen_h, fmax(0, screen_y));
 //		printf("left=%f, right=%f, top=%f, bottom=%f\n", left, right, top,
 //				bottom);
 		float elapsedTime = (double) (now.tv_sec - last_detected.tv_sec)
@@ -556,13 +561,13 @@ void *process_poling(void *args) {
 			continue;
 		}
 		Frame *frame = &frame_buffer[process_cur % FRAME_BUFF_LENGTH];
-		//			gettimeofday(&start, &tzone);
+//			gettimeofday(&start, &tzone);
 		image_process(frame->frame_buffer, frame->width, frame->stride,
 				frame->height, 1, frame->time, frame->frame_num);
-		//			gettimeofday(&now, &tzone);
-		//			elapsedTime = (double) (now.tv_sec - start.tv_sec)
-		//					+ (double) (now.tv_usec - start.tv_usec) / 1000000.0;
-		//			printf("frames : %d; %4.6f\n", frames, elapsedTime);
+//			gettimeofday(&now, &tzone);
+//			elapsedTime = (double) (now.tv_sec - start.tv_sec)
+//					+ (double) (now.tv_usec - start.tv_usec) / 1000000.0;
+//			printf("frames : %d; %4.6f\n", frames, elapsedTime);
 		frame->flag = 0;
 		process_cur++;
 	}
