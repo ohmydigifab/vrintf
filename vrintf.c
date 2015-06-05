@@ -43,7 +43,7 @@
 	eve.value = _value;\
 	int n = write(_fd, &eve, sizeof(struct input_event));\
 	if (n < 0) {\
-		perror("write");\
+		fprintf(stderr,"write");\
 		exit(-1);\
 	}\
 }while(0)
@@ -202,7 +202,7 @@ void send_detection_as_raw_string(int fd, Detection *d) {
 	} else {
 		count = sprintf(buf, "x=%d,y=%d,z=%d\n", d->x, d->y, d->z);
 	}
-	//printf(buf);
+	//fprintf(stderr,buf);
 	write(fd, buf, count);
 }
 
@@ -232,9 +232,9 @@ void *receive_from_fifo(void *args) {
 			}
 		}
 		buf[i] = '\0';
-		//printf(buf);
+		//fprintf(stderr,buf);
 		if (i == sizeof(buf) - 1) {
-			perror("input event is too long");
+			fprintf(stderr, "input event is too long");
 			exit(1);
 		}
 		Detection *d = &receive_detection_buffer[receive_buff_cur
@@ -364,7 +364,7 @@ void *send_to_fifo(void *args) {
  *      abort with error.
  */
 int open_fifo(const char *filename) {
-	int fd = 0;
+	int fd = -1;
 	struct stat ss;
 	if ( NULL == filename)
 		return 0;
@@ -380,8 +380,8 @@ int open_fifo(const char *filename) {
 		}
 	}
 	fd = open(filename, O_RDWR | O_NONBLOCK);
-	if (0 > fd) {
-		fprintf( stderr, "Failed to open fifo [%s] for writing.\n", filename);
+	if (0 >= fd) {
+		fprintf(stderr, "Failed to open fifo [%s] for writing.\n", filename);
 		return 0;
 	}
 	return fd;
@@ -434,7 +434,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 		now_on = on;
 		toggled = 1;
 
-		printf("id=%d; on: %d; duration=%f\n", toggle_buff_cur, tg->on,
+		fprintf(stderr, "id=%d; on: %d; duration=%f\n", toggle_buff_cur, tg->on,
 				tg->duration);
 		tg = tg_next;
 	}
@@ -466,7 +466,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 					d->with_c = 1;
 					d->c = c;
 					buff_cur++;
-					printf("duration: %f; x: %d; y: %d; c: %d\n",
+					fprintf(stderr, "duration: %f; x: %d; y: %d; c: %d\n",
 							tg_start->duration, d->x, d->y, d->c);
 					break;
 				}
@@ -525,7 +525,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 		screen_y = screen_h / 2 + (max_y - height / 2) * factor;
 //screen_x = fmin(screen_w, fmax(0, screen_x));
 //screen_y = fmin(screen_h, fmax(0, screen_y));
-//		printf("left=%f, right=%f, top=%f, bottom=%f\n", left, right, top,
+//		fprintf(stderr,"left=%f, right=%f, top=%f, bottom=%f\n", left, right, top,
 //				bottom);
 		float elapsedTime = (double) (now.tv_sec - last_detected.tv_sec)
 				+ (double) (now.tv_usec - last_detected.tv_usec) / 1000000.0;
@@ -550,7 +550,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 //			float dx = screen_x - last_x;
 //			float dy = screen_y - last_y;
 //			float d = sqrt(dx * dx + dy * dy);
-//			printf("d=%f: dx=%f, dx=%f\n", d, dx, dy);
+//			fprintf(stderr, "d=%f: dx=%f, dx=%f\n", d, dx, dy);
 //		}
 		last_x = screen_x;
 		last_y = screen_y;
@@ -561,7 +561,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 			tg->y = last_y;
 		}
 	}
-	//printf("max=%f, x=%f, y=%f\n", max, max_x, max_y);
+	//fprintf(stderr, "max=%f, x=%f, y=%f\n", max, max_x, max_y);
 }
 
 void *process_poling(void *args) {
@@ -578,7 +578,7 @@ void *process_poling(void *args) {
 //			gettimeofday(&now, &tzone);
 //			elapsedTime = (double) (now.tv_sec - start.tv_sec)
 //					+ (double) (now.tv_usec - start.tv_usec) / 1000000.0;
-//			printf("frames : %d; %4.6f\n", frames, elapsedTime);
+//			fprintf(stderr, "frames : %d; %4.6f\n", frames, elapsedTime);
 		frame->flag = 0;
 		process_cur++;
 	}
@@ -588,21 +588,31 @@ int main(int argc, char ** argv) {
 	parse_args(argc, argv);
 
 	if (event_out_fifoname != NULL) {
-		int fd = open_fifo(event_out_fifoname);
-		if (fd <= 0) {
-			perror("Invalid fifo.\nPlease refer -h");
+		int fd;
+		if (0 == strcmp(event_out_fifoname, "-")) {
+			fd = 0; //stdout
+		} else {
+			fd = open_fifo(event_out_fifoname);
+		}
+		if (fd < 0) {
+			fprintf(stderr, "Invalid fifo.\nPlease refer -h");
 			return -1;
 		}
 		pthread_t pt;
 		pthread_create(&pt, NULL, &send_to_fifo, (void*) fd);
 	} else {
-		perror("Invalid args.\nPlease refer -h");
+		fprintf(stderr, "Invalid args.\nPlease refer -h");
 		return -1;
 	}
 	if (event_in_fifoname != NULL) {
-		int fd = open_fifo(event_in_fifoname);
-		if (fd <= 0) {
-			perror("Invalid fifo.\nPlease refer -h");
+		int fd;
+		if (0 == strcmp(event_in_fifoname, "-")) {
+			fd = 0; //stdout
+		} else {
+			fd = open_fifo(event_in_fifoname);
+		}
+		if (fd < 0) {
+			fprintf(stderr, "Invalid fifo.\nPlease refer -h");
 			return -1;
 		}
 		pthread_t pt;
@@ -664,10 +674,10 @@ int main(int argc, char ** argv) {
 	gettimeofday(&now, &tzone);
 	elapsedTime = (double) (now.tv_sec - start.tv_sec)
 			+ (double) (now.tv_usec - start.tv_usec) / 1000000.0;
-	printf("frames: %d; skip_frames: %d;  %4.6f fps\n", frames, skip_frames,
-			frames / elapsedTime);
+	fprintf(stderr, "frames: %d; skip_frames: %d;  %4.6f fps\n", frames,
+			skip_frames, frames / elapsedTime);
 
-	printf("ok\n");
+	fprintf(stderr, "ok\n");
 
 	return 0;
 }
@@ -687,14 +697,14 @@ void parse_args(int argc, char ** argv) {
 		} else if (0 == strcmp(argv[i], "--linux-mouse-input-emu")) {
 			output_type = LinuxMouseInput;
 		} else {
-			fprintf( stderr, "Invalid argument: \'%s\'\n", argv[i]);
+			fprintf(stderr, "Invalid argument: \'%s\'\n", argv[i]);
 			exit(1);
 		}
 	}
 }
 
 void showhelp(void) {
-	fprintf( stdout, "vrintf");
+	fprintf(stdout, "vrintf");
 	return;
 }
 
