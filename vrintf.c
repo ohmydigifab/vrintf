@@ -74,16 +74,16 @@ typedef struct _Toggle {
 	struct timeval time;
 	float duration;
 	int on;
-	int x;
-	int y;
+	float x;
+	float y;
 	int flag;
 } Toggle;
 
 typedef struct _Detection {
 	struct timeval time;
-	int x;
-	int y;
-	int z;
+	float x;
+	float y;
+	float z;
 	int c;
 	int with_c;
 } Detection;
@@ -96,12 +96,13 @@ static int frame_w = 640;
 static int frame_h = 480;
 static int screen_w = 1920;
 static int screen_h = 1080;
-static int last_x = 0;
-static int last_y = 0;
+static float last_x = 0;
+static float last_y = 0;
 static int last_c = 0;
 static int repeat_num = 0;
 static int now_on = 0;
 static OutputType output_type = RawString;
+static int decimal_place = 0;
 
 #define DETECTION_BUFF_LENGTH 1024
 static unsigned int buff_cur = 0;
@@ -197,10 +198,13 @@ void send_detection_as_linux_mouse_input(int fd, Detection *d) {
 void send_detection_as_raw_string(int fd, Detection *d) {
 	char buf[512];
 	int count;
+	int dp = decimal_place;
 	if (d->with_c) {
-		count = sprintf(buf, "x=%d,y=%d,z=%d,c=%d\n", d->x, d->y, d->z, d->c);
+		count = sprintf(buf, "x=%.*f,y=%.*f,z=%.*f,c=%d\n", dp, d->x, dp, d->y,
+				dp, d->z, d->c);
 	} else {
-		count = sprintf(buf, "x=%d,y=%d,z=%d\n", d->x, d->y, d->z);
+		count = sprintf(buf, "x=%.*f,y=%.*f,z=%.*f\n", dp, d->x, dp, d->y, dp,
+				d->z);
 	}
 	//fprintf(stderr,buf);
 	write(fd, buf, count);
@@ -240,7 +244,7 @@ void *receive_from_fifo(void *args) {
 		Detection *d = &receive_detection_buffer[receive_buff_cur
 				% DETECTION_BUFF_LENGTH];
 		memset(d, 0, sizeof(Detection));
-		int num = sscanf(buf, "x=%d,y=%d,z=%d,c=%d", &d->x, &d->y, &d->z,
+		int num = sscanf(buf, "x=%f,y=%f,z=%f,c=%d", &d->x, &d->y, &d->z,
 				&d->c);
 		if (num == 3) {
 			d->with_c = 0;
@@ -396,7 +400,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 	float max = 0;
 	float max_x = 0;
 	float max_y = 0;
-	int x, y;
+	float x, y;
 	for (y = 0; y < height; y++) {
 		for (x = 0; x < width; x++) {
 			int offset = widthStep * y + nChannels * x;
@@ -466,7 +470,7 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 					d->with_c = 1;
 					d->c = c;
 					buff_cur++;
-					fprintf(stderr, "duration: %f; x: %d; y: %d; c: %d\n",
+					fprintf(stderr, "duration: %f; x: %f; y: %f; c: %d\n",
 							tg_start->duration, d->x, d->y, d->c);
 					break;
 				}
@@ -518,8 +522,8 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 		}
 		max_x = (left + right) / 2;
 		max_y = (top + bottom) / 2;
-		int screen_x = 0;
-		int screen_y = 0;
+		float screen_x = 0;
+		float screen_y = 0;
 		float factor = fmaxf(screen_w / width, screen_h / height) * 1.2;
 		screen_x = screen_w / 2 - (max_x - width / 2) * factor;
 		screen_y = screen_h / 2 + (max_y - height / 2) * factor;
@@ -690,6 +694,8 @@ void parse_args(int argc, char ** argv) {
 				|| (0 == strcmp(argv[i], "--help"))) {
 			showhelp();
 			exit(0);
+		} else if (0 == strncmp(argv[i], "-dp", 3)) {
+			sscanf(argv[i] + 3, "%d", &decimal_place);
 		} else if (0 == strncmp(argv[i], "-i", 2)) {
 			event_in_fifoname = argv[i] + 2;
 		} else if (0 == strncmp(argv[i], "-o", 2)) {
