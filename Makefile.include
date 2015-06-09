@@ -1,7 +1,12 @@
 CFLAGS = -Werror -g -Wall -O0
-LDFLAGS = -L$(SDKSTAGE)/opt/vc/lib -lvcos -lbcm_host -lvchiq_arm -lpthread -ldl -lm -lrt
+LDFLAGS = -L$(SDKSTAGE)/opt/vc/lib \
+		-lvcos -lbcm_host -lvchiq_arm -lpthread -ldl -lm -lrt -lstdc++ -lz -lglib-2.0 \
+		-ljpeg -lpng12 -ltiff -ljbig \
+		-lopencv_legacy -lopencv_highgui -lopencv_core -lopencv_ml -lopencv_video -lopencv_flann \
+		-lopencv_imgproc -lopencv_calib3d -lopencv_objdetect -lopencv_features2d
 INCLUDES = -I$(SDKSTAGE)/opt/vc/include -I$(SDKSTAGE)/opt/vc/include/interface/vcos/pthreads \
-		-I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux
+		-I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux \
+		-I$(SDKSTAGE)/usr/include -I$(SDKSTAGE)/usr/include/opencv -I$(SDKSTAGE)/usr/include/opencv2
 
 SRC := $(SRC) $(APP).c
 OBJS := $(OBJS) $(APP).o
@@ -9,7 +14,12 @@ OBJS := $(OBJS) $(APP).o
 all: $(APP) $(SRC) $(SUBDIRS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@ -Wno-deprecated-declarations
+	@rm -f $@ 
+	$(CC) $(CFLAGS) $(INCLUDES) -g -c $< -o $@ -Wno-deprecated-declarations
+	
+%.o: %.cpp
+	@rm -f $@ 
+	$(CXX) $(CFLAGS) $(INCLUDES) -g -c $< -o $@ -Wno-deprecated-declarations
 
 $(APP): $(OBJS)
 	$(CC) -o $@ -Wl,--whole-archive $(OBJS) $(LDFLAGS) -Wl,--no-whole-archive -rdynamic
