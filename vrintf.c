@@ -588,7 +588,9 @@ void *process_poling(void *args) {
 	}
 }
 
+extern int detect_face( int argc, char** argv );
 int main(int argc, char ** argv) {
+	detect_face(argc, argv);
 	parse_args(argc, argv);
 
 	if (event_out_fifoname != NULL) {
