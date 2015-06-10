@@ -26,6 +26,9 @@
 									<listOptionValue builtIn="false" value="/mnt/raspi/opt/vc/include/interface/vmcs_host/khronos"/>
 									<listOptionValue builtIn="false" value="/mnt/raspi/opt/vc/include/interface/vmcs_host/khronos/IL"/>
 									<listOptionValue builtIn="false" value=".././ext/ilclient"/>
+									<listOptionValue builtIn="false" value="/mnt/raspi/usr/include/opencv"/>
+									<listOptionValue builtIn="false" value="/mnt/raspi/usr/include/opencv2"/>
+									<listOptionValue builtIn="false" value="/mnt/raspi/usr/include"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1794929340" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>

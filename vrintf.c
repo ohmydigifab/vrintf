@@ -92,8 +92,10 @@ typedef struct _Detection {
 static int running = 1;
 static const char *event_out_fifoname = NULL;
 static const char *event_in_fifoname = NULL;
-static int frame_w = 640;
-static int frame_h = 480;
+static int frame_w = 480;
+static int frame_h = 240;
+static int frame_rate = 30;
+static int shuter_duration = 10000;
 static int screen_w = 1920;
 static int screen_h = 1080;
 static float last_x = 0;
@@ -568,6 +570,11 @@ void image_process(unsigned char *imageData, int width, int widthStep,
 	//fprintf(stderr, "max=%f, x=%f, y=%f\n", max, max_x, max_y);
 }
 
+extern void detect_face_init();
+extern void detect_face_deinit();
+extern int detect_face(unsigned char *imageData, int width, int widthStep, int height,
+		int nChannels, struct timeval now, int nFrame);
+
 void *process_poling(void *args) {
 	int process_cur = 0;
 	while (1) {
@@ -577,7 +584,7 @@ void *process_poling(void *args) {
 		}
 		Frame *frame = &frame_buffer[process_cur % FRAME_BUFF_LENGTH];
 //			gettimeofday(&start, &tzone);
-		image_process(frame->frame_buffer, frame->width, frame->stride,
+		detect_face(frame->frame_buffer, frame->width, frame->stride,
 				frame->height, 1, frame->time, frame->frame_num);
 //			gettimeofday(&now, &tzone);
 //			elapsedTime = (double) (now.tv_sec - start.tv_sec)
@@ -588,10 +595,10 @@ void *process_poling(void *args) {
 	}
 }
 
-extern int detect_face( int argc, char** argv );
 int main(int argc, char ** argv) {
-	detect_face(argc, argv);
 	parse_args(argc, argv);
+
+	detect_face_init();
 
 	if (event_out_fifoname != NULL) {
 		int fd;
@@ -627,8 +634,8 @@ int main(int argc, char ** argv) {
 
 	char cam_command[256];
 	sprintf(cam_command,
-			"/opt/vc/bin/raspividyuv -w %d -h %d -fps %d -t 0 -ss %d -o -",
-			frame_w, frame_h, 30, 1000);
+			"/opt/vc/bin/raspividyuv -n -w %d -h %d -fps %d -t 0 -ss %d -o -",
+			frame_w, frame_h, frame_rate, shuter_duration);
 	FILE *fp = popen(cam_command, "r");
 
 	pthread_t pt;
@@ -698,6 +705,14 @@ void parse_args(int argc, char ** argv) {
 			exit(0);
 		} else if (0 == strncmp(argv[i], "-dp", 3)) {
 			sscanf(argv[i] + 3, "%d", &decimal_place);
+		} else if (0 == strncmp(argv[i], "-fps", 4)) {
+			sscanf(argv[i] + 4, "%d", &frame_rate);
+		} else if (0 == strncmp(argv[i], "-w", 2)) {
+			sscanf(argv[i] + 2, "%d", &frame_w);
+		} else if (0 == strncmp(argv[i], "-h", 2)) {
+			sscanf(argv[i] + 2, "%d", &frame_h);
+		} else if (0 == strncmp(argv[i], "-ss", 3)) {
+			sscanf(argv[i] + 3, "%d", &shuter_duration);
 		} else if (0 == strncmp(argv[i], "-i", 2)) {
 			event_in_fifoname = argv[i] + 2;
 		} else if (0 == strncmp(argv[i], "-o", 2)) {
