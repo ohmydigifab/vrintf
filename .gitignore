@@ -1,4 +1,5 @@
 *.bin
 *.o
+*.so
 .settings
 /vrintf

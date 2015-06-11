@@ -574,6 +574,10 @@ extern void detect_face_init();
 extern void detect_face_deinit();
 extern int detect_face(unsigned char *imageData, int width, int widthStep, int height,
 		int nChannels, struct timeval now, int nFrame);
+extern void detect_finger_init();
+extern void detect_finger_deinit();
+extern int detect_finger(unsigned char *imageData, int width, int widthStep, int height,
+		int nChannels, struct timeval now, int nFrame);
 
 void *process_poling(void *args) {
 	int process_cur = 0;
@@ -584,7 +588,7 @@ void *process_poling(void *args) {
 		}
 		Frame *frame = &frame_buffer[process_cur % FRAME_BUFF_LENGTH];
 //			gettimeofday(&start, &tzone);
-		detect_face(frame->frame_buffer, frame->width, frame->stride,
+		detect_finger(frame->frame_buffer, frame->width, frame->stride,
 				frame->height, 1, frame->time, frame->frame_num);
 //			gettimeofday(&now, &tzone);
 //			elapsedTime = (double) (now.tv_sec - start.tv_sec)
@@ -598,7 +602,7 @@ void *process_poling(void *args) {
 int main(int argc, char ** argv) {
 	parse_args(argc, argv);
 
-	detect_face_init();
+	detect_finger_init();
 
 	if (event_out_fifoname != NULL) {
 		int fd;

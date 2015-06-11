@@ -1,7 +1,7 @@
 APP = vrintf
-SRC = face.cpp
-OBJS = face.o
+SRC = face_detector.cpp finger_detector.cpp
+OBJS = face_detector.o finger_detector.o
 CLEAN =
-SUBDIRS = ext/hidclient
+SUBDIRS = ext/hidclient ext/HandyAR
 
 include ./Makefile.include
