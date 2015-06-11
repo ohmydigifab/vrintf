@@ -8,7 +8,7 @@ LDFLAGS = -L$(SDKSTAGE)/opt/vc/lib \
 INCLUDES = -I$(SDKSTAGE)/opt/vc/include -I$(SDKSTAGE)/opt/vc/include/interface/vcos/pthreads \
 		-I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux \
 		-I$(SDKSTAGE)/usr/include -I$(SDKSTAGE)/usr/include/opencv -I$(SDKSTAGE)/usr/include/opencv2
-
+BIN_DIR = ../../bin
 TARGET = libHandyAR.so
 SRC = ColorDistribution.cpp ColorHistogram.cpp FingerTip.cpp FingertipPoseEstimation.cpp FingertipTracker.cpp HandRegion.cpp MixGaussian.cpp PoseEstimation.cpp cvFindExtrinsicCameraParams3.cpp
 OBJS = ColorDistribution.o ColorHistogram.o FingerTip.o FingertipPoseEstimation.o FingertipTracker.o HandRegion.o MixGaussian.o PoseEstimation.o cvFindExtrinsicCameraParams3.o
@@ -24,7 +24,7 @@ all: $(TARGET) $(SRC) $(SUBDIRS)
 	$(CXX) $(CFLAGS) $(INCLUDES) -g -c $< -o $@ -Wno-deprecated-declarations
 
 $(TARGET): $(OBJS)
-	$(CXX) -shared -fPIC $(LDFLAGS) $(OBJS) -o $(TARGET)
+	$(CXX) -shared -fPIC $(CFLAGS) $(LDFLAGS) $(OBJS) -o $(TARGET) && cp $(TARGET) $(BIN_DIR)
 
 $(SUBDIRS):
 	$(MAKE) -C $@

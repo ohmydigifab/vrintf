@@ -1,13 +1,19 @@
 #include "ext/HandyAR/FingerTip.h"
+#include "ext/HandyAR/HandRegion.h"
+#include "sys/time.h"
 
 extern "C" {
 
 FingerTip *ftman = NULL;
+HandRegion *hrman = NULL;
 void detect_finger_init() {
 	ftman = new FingerTip();
+	hrman = new HandRegion();
+	hrman->LoadSkinColorProbTable();
 }
 void detect_finger_deinit() {
 	delete ftman;
+	delete hrman;
 }
 IplImage *get_YCrCb_image(unsigned char *imageData, int width, int widthStep,
 		int height) {
@@ -22,7 +28,7 @@ IplImage *get_YCrCb_image(unsigned char *imageData, int width, int widthStep,
 
 	IplImage frame_u = { };
 	frame_u.nSize = sizeof(IplImage);
-	frame_u.imageDataOrigin = (char*) imageData + height * widthStep;
+	frame_u.imageDataOrigin = (char*) imageData + 5 * height * widthStep / 4;
 	frame_u.imageData = (char*) frame_u.imageDataOrigin;
 	frame_u.nChannels = 1;
 	frame_u.width = width / 2;
@@ -31,7 +37,7 @@ IplImage *get_YCrCb_image(unsigned char *imageData, int width, int widthStep,
 
 	IplImage frame_v = { };
 	frame_v.nSize = sizeof(IplImage);
-	frame_v.imageDataOrigin = (char*) imageData + 5 * height * widthStep / 4;
+	frame_v.imageDataOrigin = (char*) imageData + height * widthStep;
 	frame_v.imageData = (char*) frame_v.imageDataOrigin;
 	frame_v.nChannels = 1;
 	frame_v.width = width / 2;
@@ -51,6 +57,8 @@ IplImage *get_YCrCb_image(unsigned char *imageData, int width, int widthStep,
 }
 int detect_finger(unsigned char *imageData, int width, int widthStep,
 		int height, int nChannels, struct timeval time, int nFrame) {
+	int debug = 0;
+
 	IplImage frame = { };
 	frame.nSize = sizeof(IplImage);
 	frame.imageData = (char*) imageData;
@@ -65,20 +73,29 @@ int detect_finger(unsigned char *imageData, int width, int widthStep,
 	double elapsedTime = 0.0;
 	gettimeofday(&start, &tzone);
 
-	IplImage *src_img = cvCreateImage(cvGetSize(&frame), IPL_DEPTH_8U, 1);
+	IplImage *src_img = get_YCrCb_image(imageData, width, widthStep, height);
+	cvCvtColor(src_img, src_img, CV_YCrCb2BGR);
 
-	cvThreshold(&frame, src_img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-	frame.height = 3 * frame.height / 2;
-	cvSaveImage("finger_gray.png", &frame);
-	cvSaveImage("finger_bin.png", src_img);
-	ftman->FindFingerTipCandidatesByCurvature(src_img, true);
+	IplImage *hand_ref = hrman->GetHandRegion(src_img, NULL, debug);
+
+	//cvThreshold(&frame, src_img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+//	cvSaveImage("finger_origin.png", &frame);
+//	cvSaveImage("finger_color.png", src_img);
+//	cvSaveImage("finger_gray.png", gray_img);
+//	cvSaveImage("finger_hand.png", hand_ref);
+	//cvSaveImage("finger_bin.png", src_img);
+	int nFingertipCandidates = ftman->FindFingerTipCandidatesByCurvature(hand_ref, debug);
 	cvReleaseImage(&src_img);
 
 	gettimeofday(&now, &tzone);
 	elapsedTime = (double) (now.tv_sec - start.tv_sec)
 			+ (double) (now.tv_usec - start.tv_usec) / 1000000.0;
-	fprintf(stderr, "detect_finger: %4.6f\n", elapsedTime);
+	fprintf(stderr, "detect_finger: num=%d, time=%4.6f\n", nFingertipCandidates, elapsedTime);
 
+	if(nFingertipCandidates > 8)
+	{
+		exit(0);
+	}
 	return 0;
 }
 

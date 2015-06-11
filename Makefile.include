@@ -3,15 +3,16 @@ LDFLAGS = -L$(SDKSTAGE)/opt/vc/lib \
 		-lvcos -lbcm_host -lvchiq_arm -lpthread -ldl -lm -lrt -lstdc++ -lz -lglib-2.0 \
 		-ljpeg -lpng12 -ltiff -ljbig \
 		-lopencv_legacy -lopencv_highgui -lopencv_core -lopencv_ml -lopencv_video -lopencv_flann \
-		-lopencv_imgproc -lopencv_calib3d -lopencv_objdetect -lopencv_features2d
+		-lopencv_imgproc -lopencv_calib3d -lopencv_objdetect -lopencv_features2d \
+		-Lext/HandyAR -lHandyAR -lglut -lGLU -lGL
 INCLUDES = -I$(SDKSTAGE)/opt/vc/include -I$(SDKSTAGE)/opt/vc/include/interface/vcos/pthreads \
 		-I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux \
 		-I$(SDKSTAGE)/usr/include -I$(SDKSTAGE)/usr/include/opencv -I$(SDKSTAGE)/usr/include/opencv2
-
+BIN_DIR = bin
 SRC := $(SRC) $(APP).c
 OBJS := $(OBJS) $(APP).o
 
-all: $(APP) $(SRC) $(SUBDIRS)
+all: bin/$(APP) $(SRC) $(SUBDIRS)
 
 %.o: %.c
 	@rm -f $@ 
@@ -21,8 +22,11 @@ all: $(APP) $(SRC) $(SUBDIRS)
 	@rm -f $@ 
 	$(CXX) $(CFLAGS) $(INCLUDES) -g -c $< -o $@ -Wno-deprecated-declarations
 
-$(APP): $(OBJS)
-	$(CC) -o $@ -Wl,--whole-archive $(OBJS) $(LDFLAGS) -Wl,--no-whole-archive -rdynamic
+$(BIN_DIR)/$(APP): $(OBJS)
+	@if [ ! -d $(BIN_DIR) ]; \
+		then echo "mkdir -p $(BIN_DIR)"; mkdir -p $(BIN_DIR); \
+	fi
+	$(CC) -o $@ -Wl,--whole-archive $(OBJS) $(LDFLAGS) -Wl,--no-whole-archive -rdynamic -Wl,--rpath=.
 	
 $(SUBDIRS):
 	$(MAKE) -C $@
@@ -30,7 +34,7 @@ $(SUBDIRS):
 .PHONY: clean rebuild $(SUBDIRS)
 
 clean:
-	rm -f $(APP) $(APP).o $(CLEAN)
+	rm -f $(BIN_DIR)/$(APP) *.o $(CLEAN)
 
 rebuild:
 	make -f Makefile-shared clean && make -f Makefile-shared
