@@ -576,8 +576,8 @@ extern int detect_face(unsigned char *imageData, int width, int widthStep, int h
 		int nChannels, struct timeval now, int nFrame);
 extern void detect_finger_init();
 extern void detect_finger_deinit();
-extern int detect_finger(unsigned char *imageData, int width, int widthStep, int height,
-		int nChannels, struct timeval now, int nFrame);
+extern int detect_finger(unsigned char *imageData, int width, int widthStep,
+		int height, int nChannels, struct timeval now, int nFrame);
 
 void *process_poling(void *args) {
 	int process_cur = 0;
@@ -638,7 +638,7 @@ int main(int argc, char ** argv) {
 
 	char cam_command[256];
 	sprintf(cam_command,
-			"/opt/vc/bin/raspividyuv -n -w %d -h %d -fps %d -t 0 -ss %d -o -",
+			"/opt/vc/bin/raspividyuv -n -w %d -h %d -fps %d -t 0 -ss %d -ex fixedfps -awb off -ISO 100 -ifx none -o -",
 			frame_w, frame_h, frame_rate, shuter_duration);
 	FILE *fp = popen(cam_command, "r");
 

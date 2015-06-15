@@ -199,14 +199,14 @@ IplImage * HandRegion::GetHandRegion( IplImage * srcImage, IplImage * srcGrayIma
     //
     // Smoothing and Thresholding
     //
-    //cvSmooth( _pImage, _pImage, CV_BLUR, 5, 5 );
-    //cvThreshold( _pImage, _pImage, 128, 255, CV_THRESH_BINARY );
+    cvSmooth( _pImage, _pImage, CV_BLUR, 5, 5 );
+    cvThreshold( _pImage, _pImage, 128, 255, CV_THRESH_BINARY );
 
     //
     // Morphology Operation
     //
-//    cvMorphologyEx( _pImage, _pImage, 0, 0, CV_MOP_OPEN, 1 );
-//    cvMorphologyEx( _pImage, _pImage, 0, 0, CV_MOP_CLOSE, 1 );
+    cvMorphologyEx( _pImage, _pImage, 0, 0, CV_MOP_OPEN, 1 );
+    cvMorphologyEx( _pImage, _pImage, 0, 0, CV_MOP_CLOSE, 1 );
 
     //
     // Connected Component Filtering

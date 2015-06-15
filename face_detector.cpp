@@ -27,7 +27,9 @@ void detect_face_deinit() {
 	cvReleaseMemStorage(&cvMStr);
 	// カスケード識別器の解放
 	cvReleaseHaarClassifierCascade(&cvHCC);
-	cvDestroyWindow("Example2");
+#ifdef DEBUG_WINDOW
+	cvDestroyWindow("debug");
+#endif
 }
 int detect_face(unsigned char *imageData, int width, int widthStep, int height,
 		int nChannels, struct timeval time, int nFrame) {
